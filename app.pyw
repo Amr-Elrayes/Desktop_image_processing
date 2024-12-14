@@ -159,7 +159,7 @@ class ImageProcessingApp:
         if self.image is None:
             messagebox.showwarning("Warning", "Please load an image first.")
             return
-        gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
+        gray_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
         self.image = cv2.cvtColor(gray_image, cv2.COLOR_GRAY2BGR)
         self.display_image(self.image, self.modified_canvas)
 
@@ -185,7 +185,7 @@ class ImageProcessingApp:
             try:
                 width = int(width_entry.get())
                 height = int(height_entry.get())
-                resized_image = cv2.resize(self.image, (width, height))
+                resized_image = cv2.resize(self.original_image, (width, height))
                 self.image = resized_image
                 self.display_image(self.image, self.modified_canvas)
                 resize_window.destroy()
@@ -216,7 +216,7 @@ class ImageProcessingApp:
                 angle = float(angle_entry.get())
 
                 # Use the processed image if available, otherwise use the original image
-                image_to_rotate = self.image if self.image is not None else self.original_image.copy()
+                image_to_rotate =  self.original_image.copy()
 
                 # Calculate the rotation matrix
                 height, width = image_to_rotate.shape[:2]
