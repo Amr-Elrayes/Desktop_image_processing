@@ -1,10 +1,14 @@
 
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import Button, Label, Toplevel, filedialog, messagebox
 from PIL import Image, ImageTk
 import cv2
 from matplotlib import pyplot as plt
 import numpy as np
+import scipy.fftpack
+from tkinter import simpledialog
+from collections import Counter
+
 
 
 class ImageProcessingApp:
@@ -68,24 +72,45 @@ class ImageProcessingApp:
             ("Resize Image", self.resize_image),
             ("Rotate Image", self.rotate_image),
             ("Translate Image", self.translate_image),
-            ("Show Histogram (Gray)", self.show_histogram_gray),
-            ("Show Histogram (RGB)", self.show_histogram_rgb),
-            ("Histogram Equalization", self.histogram_equalization),
-            ("Contrast Stretching", self.contrast_stretching),
             ("Thresholding", self.thresholding),
-            ("Negative Transformation", self.negative_transformation),
-            ("Log Transformation", self.log_transformation),
-            ("Power Law Transformation", self.power_law_transformation),
-            ("Gaussian Blur", self.apply_gaussian_blur),
-            ("Average Blur", self.apply_average_blur),
-            ("Median Blur", self.apply_median_blur),
-            ("Max Blur", self.apply_max_blur),
-            ("Min Blur", self.apply_min_blur),
-            ("Add Gaussian Noise", self.add_gaussian_noise),
-            ("Add Salt & Pepper Noise", self.add_salt_pepper_noise),
-            ("Sharpening Filters", self.sharpening_filters),
-            ("Edge Detection (Sobel)", self.sobel_edge_detection),
-            ("Edge Detection (Canny)", self.canny_edge_detection),
+            ("Image Sampling", self.sample_image),
+            ("Image Quantization", self.quantize_image),
+            ("Image Histogram", self.display_histogram),
+            ("CMY Model", self.convert_to_cmy),
+            ("HSI Model", self.convert_to_hsi),
+            ("LAB Model", self.convert_to_lab),
+            ("Ordered dithering", self.apply_ordered_dithering),
+            ("Median Cut", self.apply_median_cut_quantization),
+            ("Apply DCT & IDCT", self.apply_dct_and_idct),
+            ("DWT", self.apply_Dwt_transform),
+            ("Invers DWT", self.perform_inverse_Dwt_transform),
+            ("Wavelet", self.apply_wavelet_transform_multi_level),
+            ("Invers Wavelet", self.display_inverse_wavelet_reconstruction),
+            ("Haar", self.apply_haar_wavelet_transform),
+            ("Huffman", self.huffman_encoding),
+            ("Shannon", self.shannon_fano_encoding),
+            ("Arithmetic Encoding", self.arithmetic_encoding),
+            
+            
+            
+            
+            # ("Show Histogram (Gray)", self.show_histogram_gray),
+            # ("Show Histogram (RGB)", self.show_histogram_rgb),
+            # ("Histogram Equalization", self.histogram_equalization),
+            # ("Contrast Stretching", self.contrast_stretching),
+            # ("Negative Transformation", self.negative_transformation),
+            # ("Log Transformation", self.log_transformation),
+            # ("Power Law Transformation", self.power_law_transformation),
+            # ("Gaussian Blur", self.apply_gaussian_blur),
+            # ("Average Blur", self.apply_average_blur),
+            # ("Median Blur", self.apply_median_blur),
+            # ("Max Blur", self.apply_max_blur),
+            # ("Min Blur", self.apply_min_blur),
+            # ("Add Gaussian Noise", self.add_gaussian_noise),
+            # ("Add Salt & Pepper Noise", self.add_salt_pepper_noise),
+            # ("Sharpening Filters", self.sharpening_filters),
+            # ("Edge Detection (Sobel)", self.sobel_edge_detection),
+            # ("Edge Detection (Canny)", self.canny_edge_detection),
         ]
 
         self.buttons = []  # Store button widgets for styling
@@ -324,137 +349,1342 @@ class ImageProcessingApp:
 
         tk.Button(dimensions_window, text="Next", command=proceed_to_matrix_input).grid(row=2, column=0, columnspan=2, pady=10)
 
+    def sample_image(self):
+        if self.image is None:
+            messagebox.showwarning("Warning", "Please load an image first.")
+            return
+        try:
+            # Prompt user for cropping dimensions
+            crop_window = tk.Toplevel()
+            crop_window.title("Enter Crop Dimensions")
 
+            tk.Label(crop_window, text="Start Y:").grid(row=0, column=0)
+            start_y = tk.Entry(crop_window)
+            start_y.grid(row=0, column=1)
 
-    def show_histogram_gray(self):
+            tk.Label(crop_window, text="End Y:").grid(row=1, column=0)
+            end_y = tk.Entry(crop_window)
+            end_y.grid(row=1, column=1)
+
+            tk.Label(crop_window, text="Start X:").grid(row=2, column=0)
+            start_x = tk.Entry(crop_window)
+            start_x.grid(row=2, column=1)
+
+            tk.Label(crop_window, text="End X:").grid(row=3, column=0)
+            end_x = tk.Entry(crop_window)
+            end_x.grid(row=3, column=1)
+
+            def apply_crop():
+                try:
+                    sy = int(start_y.get())
+                    ey = int(end_y.get())
+                    sx = int(start_x.get())
+                    ex = int(end_x.get())
+
+                # Perform cropping on the original image
+                    crop_img = self.original_image[sy:ey, sx:ex]
+                    self.image = cv2.cvtColor(crop_img, cv2.COLOR_BGR2RGB)
+                    self.display_image(self.image, self.modified_canvas)
+                    crop_window.destroy()
+                except Exception as e:
+                    messagebox.showerror("Error", f"Invalid dimensions or cropping failed: {e}")
+
+            tk.Button(crop_window, text="Crop", command=apply_crop).grid(row=4, columnspan=2)
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+    def quantize_image(self):
+        if self.image is None:
+            messagebox.showwarning("Warning", "Please load an image first.")
+            return
+        try:
+        # Prompt user for quantization level
+            quant_window = tk.Toplevel()
+            quant_window.title("Select Quantization Level")
+
+            tk.Label(quant_window, text="Choose quantization level:").pack()
+
+            level_var = tk.StringVar(value="8")
+
+            tk.Radiobutton(quant_window, text="4-bit", variable=level_var, value="4").pack(anchor="w")
+            tk.Radiobutton(quant_window, text="8-bit", variable=level_var, value="8").pack(anchor="w")
+            tk.Radiobutton(quant_window, text="16-bit", variable=level_var, value="16").pack(anchor="w")
+            tk.Radiobutton(quant_window, text="32-bit", variable=level_var, value="32").pack(anchor="w")
+
+            def apply_quantization():
+                try:
+                    level = int(level_var.get())
+                    num_bins = 2 ** (level // 4)  # Convert bit level to number of bins
+                    bins = np.linspace(0, self.original_image.max(), num_bins)
+                    quantized_img = np.digitize(self.original_image, bins)
+                    quantized_img = (np.vectorize(bins.tolist().__getitem__)(quantized_img - 1).astype(int))
+
+                # Ensure values are in valid range for display
+                    quantized_img = np.clip(quantized_img, 0, 255)
+
+                    self.image = cv2.cvtColor(quantized_img.astype(np.uint8), cv2.COLOR_BGR2RGB)
+                    self.display_image(self.image, self.modified_canvas)
+                    quant_window.destroy()
+                except Exception as e:
+                    messagebox.showerror("Error", f"Quantization failed: {e}")
+
+            tk.Button(quant_window, text="Apply", command=apply_quantization).pack()
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+            
+            
+            
+    def display_histogram(self):
+        if self.image is None:
+            messagebox.showwarning("Warning", "Please load an image first.")
+            return
+        try:
+        # Convert to grayscale if the image is in color
+            if len(self.original_image.shape) == 3:
+                gray = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
+            else:
+                gray = self.original_image
+
+        # Calculate the histogram
+            hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
+
+        # Plot the histogram
+            plt.figure()
+            plt.hist(gray.ravel(), 256, [0, 256])
+            plt.title('Histogram')
+            plt.xlabel('Pixel Intensity')
+            plt.ylabel('Frequency')
+            plt.show()
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to display histogram: {e}")
+            
+    def convert_to_cmy(self):
+        if self.image is None:
+            messagebox.showwarning("Warning", "Please load an image first.")
+            return
+        try:
+        # Normalize the original image
+            normalized_img = self.original_image / 255.0
+
+        # Extract individual color channels
+            B, G, R = normalized_img[:, :, 0], normalized_img[:, :, 1], normalized_img[:, :, 2]
+
+        # Compute CMY channels
+            C = 1 - R
+            M = 1 - G
+            Y = 1 - B
+
+        # Merge CMY channels to form the CMY image
+            cmy_image = cv2.merge([C, M, Y])
+
+        # Convert back to 8-bit image
+            cmy_image = (cmy_image * 255).astype(np.uint8)
+
+        # Display the CMY image
+            self.image = cmy_image
+            self.display_image(self.image, self.modified_canvas)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to convert to CMY: {e}")
+            
+    def convert_to_hsi(self):
+        if self.image is None:
+            messagebox.showwarning("Warning", "Please load an image first.")
+            return
+        try:
+        # Convert the original image to HSI (HSV_FULL in OpenCV)
+            hsi_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2HSV_FULL)
+
+        # Display the HSI image
+            self.image = hsi_image
+            self.display_image(self.image, self.modified_canvas)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to convert to HSI: {e}")
+            
+    def convert_to_lab(self):
+        if self.image is None:
+            messagebox.showwarning("Warning", "Please load an image first.")
+            return
+        try:
+        # Convert the original image to LAB color space
+            lab_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2LAB)
+
+        # Display the LAB image
+            self.image = lab_image
+            self.display_image(self.image, self.modified_canvas)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to convert to LAB: {e}")
+            
+    def apply_ordered_dithering(self):
+        if self.image is None:
+            messagebox.showwarning("Warning", "Please load an image first.")
+            return
+        try:
+            def get_dither_matrix(rows, cols):
+                try:
+                    matrix_window = tk.Toplevel()
+                    matrix_window.title("Enter Dither Matrix Values")
+
+                    matrix_entries = []
+                    for i in range(rows):
+                        row_entries = []
+                        for j in range(cols):
+                            entry = tk.Entry(matrix_window, width=5)
+                            entry.grid(row=i, column=j, padx=5, pady=5)
+                            row_entries.append(entry)
+                        matrix_entries.append(row_entries)
+
+                    def apply_matrix():
+                        try:
+                            dither_matrix = []
+                            for i in range(rows):
+                                row = []
+                                for j in range(cols):
+                                    value = int(matrix_entries[i][j].get())
+                                    row.append(value)
+                                dither_matrix.append(row)
+
+                            perform_dithering(dither_matrix)
+                            matrix_window.destroy()
+                        except Exception as e:
+                            messagebox.showerror("Error", f"Invalid matrix values: {e}")
+
+                    tk.Button(matrix_window, text="Apply", command=apply_matrix).grid(row=rows, columnspan=cols, pady=10)
+                except Exception as e:
+                    messagebox.showerror("Error", f"Invalid dimensions: {e}")
+
+            def perform_dithering(dither_matrix):
+                try:
+                # Convert the original image to grayscale
+                    gray_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
+
+                # Get dimensions of the dither matrix
+                    n = len(dither_matrix)
+
+                # Normalize the Image to Match Dither Matrix Range
+                    new_range_divider = 256 / (n * n + 1)
+                    normalized_img = gray_image // new_range_divider
+
+                # Apply Ordered Dithering
+                    rows, columns = gray_image.shape
+                    dithered_img = np.zeros_like(gray_image)
+
+                    for x in range(rows):
+                        for y in range(columns):
+                            i = x % n
+                            j = y % n
+
+                            if normalized_img[x, y] > dither_matrix[i][j]:
+                                dithered_img[x, y] = 255  # White
+                            else:
+                                dithered_img[x, y] = 0  # Black
+
+                # Display the Dithered Image
+                    self.image = dithered_img
+                    self.display_image(self.image, self.modified_canvas)
+
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to apply dithering: {e}")
+
+        # Prompt user for dither matrix dimensions directly
+            dim_prompt_window = tk.Toplevel()
+            dim_prompt_window.title("Enter Dither Matrix Dimensions")
+
+            tk.Label(dim_prompt_window, text="Rows:").grid(row=0, column=0, padx=5, pady=5)
+            row_var = tk.StringVar()
+            tk.Entry(dim_prompt_window, textvariable=row_var, width=10).grid(row=0, column=1, padx=5, pady=5)
+
+            tk.Label(dim_prompt_window, text="Columns:").grid(row=1, column=0, padx=5, pady=5)
+            col_var = tk.StringVar()
+            tk.Entry(dim_prompt_window, textvariable=col_var, width=10).grid(row=1, column=1, padx=5, pady=5)
+
+            def proceed_to_matrix():
+                try:
+                    rows = int(row_var.get())
+                    cols = int(col_var.get())
+                    if rows > 0 and cols > 0:
+                        dim_prompt_window.destroy()
+                        get_dither_matrix(rows, cols)
+                    else:
+                        raise ValueError("Dimensions must be positive integers.")
+                except ValueError as e:
+                    messagebox.showerror("Error", f"Invalid dimensions: {e}")
+
+            tk.Button(dim_prompt_window, text="Next", command=proceed_to_matrix).grid(row=2, columnspan=2, pady=10)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+    def apply_median_cut_quantization(self):
+        if self.image is None:
+            messagebox.showwarning("Warning", "Please load an image first.")
+            return
+        try:
+            def perform_quantization(num_colors):
+                try:
+                # Convert the original image to RGB (if not already)
+                    rgb_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2RGB)
+
+                    # Flatten the image into a 2D array of pixels (R, G, B)
+                    pixels = rgb_image.reshape((-1, 3))
+
+                # Find the most dominant colors using histogram binning
+                    hist_bins = np.linspace(0, 256, num_colors + 1, endpoint=True)
+                    quantized_pixels = np.zeros_like(pixels)
+
+                    for channel in range(3):  # Process R, G, B channels separately
+                        channel_values = pixels[:, channel]
+                        indices = np.digitize(channel_values, bins=hist_bins) - 1
+                        quantized_channel = (hist_bins[indices] + hist_bins[indices + 1]) // 2
+                        quantized_pixels[:, channel] = quantized_channel
+
+                # Reshape the quantized pixels back to the original image shape
+                    quantized_image = quantized_pixels.reshape(rgb_image.shape).astype(np.uint8)
+
+                # Convert back to BGR for OpenCV compatibility
+                    self.image = cv2.cvtColor(quantized_image, cv2.COLOR_RGB2BGR)
+                    self.display_image(self.image, self.modified_canvas)
+
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to apply quantization: {e}")
+
+        # Prompt user for the number of colors
+            prompt_window = tk.Toplevel()
+            prompt_window.title("Enter Number of Colors")
+
+            tk.Label(prompt_window, text="Number of Colors:").grid(row=0, column=0, padx=5, pady=5)
+            colors_var = tk.StringVar()
+            tk.Entry(prompt_window, textvariable=colors_var, width=10).grid(row=0, column=1, padx=5, pady=5)
+
+            def apply_quantization():
+                try:
+                    num_colors = int(colors_var.get())
+                    if num_colors > 0:
+                        prompt_window.destroy()
+                        perform_quantization(num_colors)
+                    else:
+                        raise ValueError("Number of colors must be a positive integer.")
+                except ValueError as e:
+                    messagebox.showerror("Error", f"Invalid input: {e}")
+
+            tk.Button(prompt_window, text="Apply", command=apply_quantization).grid(row=1, columnspan=2, pady=10)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+            
+    def apply_dct_and_idct(self):
+
         if self.original_image is None:
             messagebox.showwarning("Warning", "Please load an image first.")
             return
-    
-    # Convert the original image to grayscale
-        gray_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
-    
-    # Calculate the histogram
-        histogram = cv2.calcHist([gray_image], [0], None, [256], [0, 256])
-    
-    # Plot the histogram using matplotlib
-        plt.figure("Gray Histogram")
-        plt.title("Grayscale Histogram")
-        plt.xlabel("Pixel Intensity")
-        plt.ylabel("Frequency")
-        plt.plot(histogram, color='gray')
-        plt.xlim([0, 256])
-        plt.grid(True)
-        plt.show()
 
-    def show_histogram_rgb(self):
+        try:
+            import numpy as np
+            from scipy.fftpack import dct, idct
+            import cv2
+
+            def dct_2d(block):
+                """Apply 2D Discrete Cosine Transform."""
+                return dct(dct(block, axis=0, norm='ortho'), axis=1, norm='ortho')
+
+            def idct_2d(block):
+                """Apply 2D Inverse Discrete Cosine Transform."""
+                return idct(idct(block, axis=0, norm='ortho'), axis=1, norm='ortho')
+
+            def perform_dct_and_idct(block_size, scaling_factor):
+                """Function to process the image with DCT and IDCT, then show them vertically."""
+            # Convert the image to grayscale
+                original_gray = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
+
+            # Image dimensions
+                img_height, img_width = original_gray.shape
+                dct_result = np.zeros((img_height, img_width), dtype=np.float32)
+
+            # Apply DCT to blocks
+                for i in range(0, img_height, block_size):
+                    for j in range(0, img_width, block_size):
+                        block = original_gray[i:i+block_size, j:j+block_size]
+                        if block.shape == (block_size, block_size):
+                            dct_block = dct_2d(block)
+                            dct_result[i:i+block_size, j:j+block_size] = dct_block
+
+            # Apply Log scaling to DCT result
+                dct_visual = np.log(np.abs(dct_result) * scaling_factor + 1)
+
+            # Normalize DCT result to range [0, 255]
+                dct_visual_normalized = cv2.normalize(dct_visual, None, 0, 255, cv2.NORM_MINMAX)
+                dct_visual_uint8 = np.uint8(dct_visual_normalized)
+
+            # Now apply IDCT to the DCT result
+                idct_result = np.zeros_like(dct_result, dtype=np.float32)
+
+                for i in range(0, img_height, block_size):
+                    for j in range(0, img_width, block_size):
+                        block = dct_result[i:i+block_size, j:j+block_size]
+                        if block.shape == (block_size, block_size):
+                            idct_result[i:i+block_size, j:j+block_size] = idct_2d(block)
+
+            # Normalize IDCT result to range [0, 255]
+                idct_result_normalized = np.clip(idct_result, 0, 255).astype(np.uint8)
+
+            # Add titles to DCT and IDCT images
+                dct_title = "DCT Effect"
+                idct_title = "IDCT Reconstruction"
+
+            # Add text to the top of DCT image
+                dct_image_with_title = cv2.putText(dct_visual_uint8, dct_title, (10, 30),
+                                                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
+            # Add text to the top of IDCT image
+                idct_image_with_title = cv2.putText(idct_result_normalized, idct_title, (10, 30),
+                                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
+            # Combine DCT and IDCT results vertically
+                combined_image = np.vstack((dct_image_with_title, idct_image_with_title))
+
+            # Convert combined image to BGR and display it
+                self.image = cv2.cvtColor(combined_image, cv2.COLOR_GRAY2BGR)
+                self.display_image(self.image, self.modified_canvas)
+
+        # Input window for block size and scaling factor
+            def get_user_input():
+                input_window = tk.Toplevel()
+                input_window.title("DCT & IDCT Parameters")
+
+                block_size_var = tk.StringVar(value="8")
+                scaling_factor_var = tk.StringVar(value="1.0")
+
+                tk.Label(input_window, text="Block Size (e.g., 8):").grid(row=0, column=0, padx=5, pady=5)
+                tk.Entry(input_window, textvariable=block_size_var, width=10).grid(row=0, column=1, padx=5, pady=5)
+
+                tk.Label(input_window, text="Scaling Factor (e.g., 1.0):").grid(row=1, column=0, padx=5, pady=5)
+                tk.Entry(input_window, textvariable=scaling_factor_var, width=10).grid(row=1, column=1, padx=5, pady=5)
+
+                def apply_parameters():
+                    try:
+                        block_size = int(block_size_var.get())
+                        scaling_factor = float(scaling_factor_var.get())
+
+                        if block_size <= 0 or block_size > 32:
+                            raise ValueError("Block size must be between 1 and 32.")
+                        if scaling_factor <= 0:
+                            raise ValueError("Scaling factor must be greater than 0.")
+
+                        input_window.destroy()
+                        perform_dct_and_idct(block_size, scaling_factor)
+
+                    except ValueError as e:
+                        messagebox.showerror("Invalid Input", f"Error: {e}")
+
+                tk.Button(input_window, text="Apply", command=apply_parameters).grid(row=2, columnspan=2, pady=10)
+
+            get_user_input()
+
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+
+    def apply_Dwt_transform(self):
         if self.original_image is None:
             messagebox.showwarning("Warning", "Please load an image first.")
             return
-        
-        # Split the original image into its Red, Green, and Blue channels
-        channels = cv2.split(self.original_image)
-        colors = ('b', 'g', 'r')  # Corresponding colors for the histogram
-        labels = ('Blue', 'Green', 'Red')
 
-        # Plot the histograms for each channel
-        plt.figure("RGB Histogram")
-        plt.title("RGB Histogram")
-        plt.xlabel("Pixel Intensity")
-        plt.ylabel("Frequency")
+        try:
+            import numpy as np
+            import pywt # type: ignore
+            import cv2
+            import matplotlib.pyplot as plt
 
-        for channel, color, label in zip(channels, colors, labels):
-            # Calculate the histogram for the channel
-            histogram = cv2.calcHist([channel], [0], None, [256], [0, 256])
-            # Plot the histogram
-            plt.plot(histogram, color=color, label=label)
+            def compute_approximation_coefficients(img):
+                """Compute and return approximation coefficients (cA)."""
+                c = pywt.dwt2(img, 'db5')
+                return c[0]
 
-        plt.xlim([0, 256])
-        plt.legend()  # Add legend to differentiate channels
-        plt.grid(True)
-        plt.show()
+            def compute_horizontal_details(img):
+                """Compute and return horizontal detail coefficients (cH)."""
+                c = pywt.dwt2(img, 'db5')
+                return c[1][0]
 
+            def compute_vertical_details(img):
+                """Compute and return vertical detail coefficients (cV)."""
+                c = pywt.dwt2(img, 'db5')
+                return c[1][1]
 
+            def compute_diagonal_details(img):
+                """Compute and return diagonal detail coefficients (cD)."""
+                c = pywt.dwt2(img, 'db5')
+                return c[1][2]
 
-    def histogram_equalization(self):
+            def display_coefficients(coefficients, title):
+                """Display the given coefficients in the GUI."""
+                plt.figure(figsize=[5, 5])
+                plt.imshow(coefficients, cmap="gray")
+                plt.title(title)
+                plt.xticks([])
+                plt.yticks([])
+                plt.show()
+
+            def perform_wavelet_transform(selection):
+                """Perform wavelet transform based on user selection."""
+                # Convert the image to grayscale
+                original_gray = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
+
+                if selection == "cA":
+                    cA = compute_approximation_coefficients(original_gray)
+                    display_coefficients(cA, "Approximation coefficients (cA)")
+                elif selection == "cH":
+                    cH = compute_horizontal_details(original_gray)
+                    display_coefficients(cH, "Horizontal detail (cH)")
+                elif selection == "cV":
+                    cV = compute_vertical_details(original_gray)
+                    display_coefficients(cV, "Vertical detail (cV)")
+                elif selection == "cD":
+                    cD = compute_diagonal_details(original_gray)
+                    display_coefficients(cD, "Diagonal detail (cD)")
+                elif selection == "All":
+                    cA = compute_approximation_coefficients(original_gray)
+                    cH = compute_horizontal_details(original_gray)
+                    cV = compute_vertical_details(original_gray)
+                    cD = compute_diagonal_details(original_gray)
+
+                # Plot all coefficients
+                    plt.figure(figsize=[10, 10])
+
+                    plt.subplot(2, 2, 1)
+                    plt.imshow(cA, cmap="gray")
+                    plt.title("Approximation coefficients (cA)")
+                    plt.xticks([])
+                    plt.yticks([])
+
+                    plt.subplot(2, 2, 2)
+                    plt.imshow(cH, cmap="gray")
+                    plt.title("Horizontal detail (cH)")
+                    plt.xticks([])
+                    plt.yticks([])
+
+                    plt.subplot(2, 2, 3)
+                    plt.imshow(cV, cmap="gray")
+                    plt.title("Vertical detail (cV)")
+                    plt.xticks([])
+                    plt.yticks([])
+
+                    plt.subplot(2, 2, 4)
+                    plt.imshow(cD, cmap="gray")
+                    plt.title("Diagonal detail (cD)")
+                    plt.xticks([])
+                    plt.yticks([])
+
+                    plt.show()
+
+        # Input window for wavelet transform
+            def get_user_input():
+                input_window = tk.Toplevel()
+                input_window.title("Wavelet Transform Selection")
+
+                tk.Label(input_window, text="Select the type of coefficients to display:").pack(padx=10, pady=5)
+
+                selection_var = tk.StringVar(value="All")
+
+                options = ["All", "cA", "cH", "cV", "cD"]
+
+                for option in options:
+                    tk.Radiobutton(input_window, text=option, variable=selection_var, value=option).pack(anchor="w", padx=10)
+
+                def apply_selection():
+                    selection = selection_var.get()
+                    input_window.destroy()
+                    perform_wavelet_transform(selection)
+
+                tk.Button(input_window, text="Apply", command=apply_selection).pack(pady=10)
+
+            get_user_input()
+
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+    def perform_inverse_Dwt_transform(self):
+        """Perform the Inverse DWT to reconstruct the original image."""
         if self.original_image is None:
             messagebox.showwarning("Warning", "Please load an image first.")
             return
 
-    # Convert the original image to YCrCb color space
-        ycrcb_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2YCrCb)
-    
-    # Split the channels
-        y_channel, cr_channel, cb_channel = cv2.split(ycrcb_image)
-    
-    # Equalize the Y channel (luminance)
-        equalized_y_channel = cv2.equalizeHist(y_channel)
-    
-    # Merge the channels back
-        equalized_image = cv2.merge((equalized_y_channel, cr_channel, cb_channel))
-    
-    # Convert back to BGR color space
-        equalized_image_bgr = cv2.cvtColor(equalized_image, cv2.COLOR_YCrCb2BGR)
-    
-    # Update the displayed image
-        self.image = equalized_image_bgr
-        self.display_image(self.image, self.modified_canvas)
-    
+        try:
+            import numpy as np
+            import pywt # type: ignore
+            import cv2
+
+        # Convert the image to grayscale
+            original_gray = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
+
+        # Perform DWT and IDWT
+            c = pywt.dwt2(original_gray, 'db5')
+            reconstructed_image = pywt.idwt2(c, 'db5')
+
+        # Normalize the reconstructed image to fit the range [0, 255]
+            reconstructed_image = np.clip(reconstructed_image, 0, 255).astype(np.uint8)
+
+        # Convert to BGR for displaying in the main canvas
+            self.image = cv2.cvtColor(reconstructed_image, cv2.COLOR_GRAY2BGR)
+            self.display_image(self.image, self.modified_canvas)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
 
 
-
-    def contrast_stretching(self):
+    def apply_wavelet_transform_multi_level(self):
         if self.original_image is None:
             messagebox.showwarning("Warning", "Please load an image first.")
             return
 
-        # Create a new window to get input min and max pixel values
-        stretch_window = tk.Toplevel(self.root)
-        stretch_window.title("Contrast Stretching Parameters")
+        try:
+            import numpy as np
+            import pywt # type: ignore
+            import cv2
+            import matplotlib.pyplot as plt
 
-        # Labels and input entries for min and max values
-        tk.Label(stretch_window, text="Min Intensity (default: 0):").grid(row=0, column=0, padx=10, pady=5)
-        min_entry = tk.Entry(stretch_window)
-        min_entry.grid(row=0, column=1, padx=10, pady=5)
-        min_entry.insert(0, "0")  # Default value
+            def compute_approximation_coefficients(img):
+                """Compute and return approximation coefficients (cA) using multi-level wavelet."""
+                coeffs = pywt.wavedec2(img, 'db5', level=3)
+                return coeffs[0]
 
-        tk.Label(stretch_window, text="Max Intensity (default: 255):").grid(row=1, column=0, padx=10, pady=5)
-        max_entry = tk.Entry(stretch_window)
-        max_entry.grid(row=1, column=1, padx=10, pady=5)
-        max_entry.insert(0, "255")  # Default value
+            def compute_horizontal_details(img):
+                """Compute and return horizontal detail coefficients (cH) using multi-level wavelet."""
+                coeffs = pywt.wavedec2(img, 'db5', level=3)
+                return coeffs[1][0]
 
-        def apply_contrast_stretch():
-            try:
-                # Parse input values
-                min_intensity = int(min_entry.get())
-                max_intensity = int(max_entry.get())
+            def compute_vertical_details(img):
+                """Compute and return vertical detail coefficients (cV) using multi-level wavelet."""
+                coeffs = pywt.wavedec2(img, 'db5', level=3)
+                return coeffs[1][1]
 
-                if min_intensity < 0 or max_intensity > 255 or min_intensity >= max_intensity:
-                    messagebox.showerror("Error", "Invalid intensity range. Must be between 0 and 255, and Min < Max.")
+            def compute_diagonal_details(img):
+                """Compute and return diagonal detail coefficients (cD) using multi-level wavelet."""
+                coeffs = pywt.wavedec2(img, 'db5', level=3)
+                return coeffs[1][2]
+
+            def display_coefficients(coefficients, title):
+                """Display the given coefficients in a separate window."""
+                plt.figure(figsize=[5, 5])
+                plt.imshow(coefficients, cmap="gray")
+                plt.title(title)
+                plt.xticks([])  # Hide x-axis ticks
+                plt.yticks([])  # Hide y-axis ticks
+                plt.show()
+
+            def perform_wavelet_transform(selection):
+                """Perform wavelet transform based on user selection."""
+                original_gray = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
+
+                if selection == "cA":
+                    cA = compute_approximation_coefficients(original_gray)
+                    display_coefficients(cA, "Approximation coefficients (cA)")
+
+                elif selection == "cH":
+                    cH = compute_horizontal_details(original_gray)
+                    display_coefficients(cH, "Horizontal detail (cH)")
+
+                elif selection == "cV":
+                    cV = compute_vertical_details(original_gray)
+                    display_coefficients(cV, "Vertical detail (cV)")
+
+                elif selection == "cD":
+                    cD = compute_diagonal_details(original_gray)
+                    display_coefficients(cD, "Diagonal detail (cD)")
+
+                elif selection == "All":
+                    cA = compute_approximation_coefficients(original_gray)
+                    cH = compute_horizontal_details(original_gray)
+                    cV = compute_vertical_details(original_gray)
+                    cD = compute_diagonal_details(original_gray)
+
+                    # Create a single window to display all coefficients in a grid
+                    plt.figure(figsize=[10, 10])
+
+                    # Plot the approximation coefficients (cA)
+                    plt.subplot(2, 2, 1)
+                    plt.imshow(cA, cmap="gray")
+                    plt.title("Approximation coefficients (cA)")
+                    plt.xticks([])  # Hide x-axis ticks
+                    plt.yticks([])  # Hide y-axis ticks
+
+                    # Plot the horizontal detail coefficients (cH)
+                    plt.subplot(2, 2, 2)
+                    plt.imshow(cH, cmap="gray")
+                    plt.title("Horizontal detail (cH)")
+                    plt.xticks([])  # Hide x-axis ticks
+                    plt.yticks([])  # Hide y-axis ticks
+
+                    # Plot the vertical detail coefficients (cV)
+                    plt.subplot(2, 2, 3)
+                    plt.imshow(cV, cmap="gray")
+                    plt.title("Vertical detail (cV)")
+                    plt.xticks([])  # Hide x-axis ticks
+                    plt.yticks([])  # Hide y-axis ticks
+
+                    # Plot the diagonal detail coefficients (cD)
+                    plt.subplot(2, 2, 4)
+                    plt.imshow(cD, cmap="gray")
+                    plt.title("Diagonal detail (cD)")
+                    plt.xticks([])  # Hide x-axis ticks
+                    plt.yticks([])  # Hide y-axis ticks
+
+                    plt.show()
+
+
+        # Input window for wavelet transform
+            def get_user_input():
+                input_window = tk.Toplevel()
+                input_window.title("Wavelet Transform Selection")
+
+                tk.Label(input_window, text="Select the type of coefficients to display:").pack(padx=10, pady=5)
+
+                selection_var = tk.StringVar(value="All")
+
+                options = ["All", "cA", "cH", "cV", "cD"]
+
+                for option in options:
+                    tk.Radiobutton(input_window, text=option, variable=selection_var, value=option).pack(anchor="w", padx=10)
+
+                def apply_selection():
+                    selection = selection_var.get()
+                    input_window.destroy()
+                    perform_wavelet_transform(selection)
+
+                tk.Button(input_window, text="Apply", command=apply_selection).pack(pady=10)
+
+            get_user_input()
+
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+
+    def display_inverse_wavelet_reconstruction(self):
+        """Display the inverse DWT reconstruction of the image."""
+        if self.original_image is None:
+            messagebox.showwarning("Warning", "Please load an image first.")
+            return
+
+        try:
+            import numpy as np
+            import pywt  # type: ignore
+            import cv2
+        # Convert the image to grayscale
+            original_gray = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
+
+        # Perform DWT
+            c = pywt.dwt2(original_gray, 'db5')
+
+        # Perform inverse DWT reconstruction
+            imgrec = pywt.waverec2(c, 'db5')
+
+        # Normalize the reconstructed image to fit the range [0, 255]
+            imgrec = np.clip(imgrec, 0, 255).astype(np.uint8)
+            reconstructed_image_bgr = cv2.cvtColor(imgrec, cv2.COLOR_GRAY2BGR)
+            self.image = reconstructed_image_bgr
+            self.display_image(self.image, self.modified_canvas)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+
+
+
+    def apply_haar_wavelet_transform(self):
+        if self.original_image is None:
+            messagebox.showwarning("Warning", "Please load an image first.")
+            return
+
+        try:
+            import numpy as np
+            import pywt # type: ignore
+            import cv2
+            import matplotlib.pyplot as plt
+
+            def perform_wavelet_transform(selection):
+                """Perform Haar wavelet transform and display based on user selection."""
+                original_gray = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
+
+                # Perform 2D Haar wavelet transform
+                coeffs2 = pywt.dwt2(original_gray, 'haar')
+                LL, (LH, HL, HH) = coeffs2
+
+                if selection == "LL":
+                    plt.figure(figsize=[6, 6])
+                    plt.imshow(LL, cmap="gray")
+                    plt.title("Approximation (LL)")
+                    plt.axis('off')
+                    plt.show()
+
+                elif selection == "LH":
+                    plt.figure(figsize=[6, 6])
+                    plt.imshow(LH, cmap="gray")
+                    plt.title("Horizontal Detail (LH)")
+                    plt.axis('off')
+                    plt.show()
+
+                elif selection == "HL":
+                    plt.figure(figsize=[6, 6])
+                    plt.imshow(HL, cmap="gray")
+                    plt.title("Vertical Detail (HL)")
+                    plt.axis('off')
+                    plt.show()
+
+                elif selection == "HH":
+                    plt.figure(figsize=[6, 6])
+                    plt.imshow(HH, cmap="gray")
+                    plt.title("Diagonal Detail (HH)")
+                    plt.axis('off')
+                    plt.show()
+
+                elif selection == "All":
+                # Plot all components in a single window
+                    plt.figure(figsize=[12, 8])
+
+                # Original Image
+                    plt.subplot(2, 3, 1)
+                    plt.imshow(original_gray, cmap="gray")
+                    plt.title("Original Image")
+                    plt.axis('off')
+
+                # Approximation (LL)
+                    plt.subplot(2, 3, 2)
+                    plt.imshow(LL, cmap="gray")
+                    plt.title("Approximation (LL)")
+                    plt.axis('off')
+
+                # Horizontal Detail (LH)
+                    plt.subplot(2, 3, 3)
+                    plt.imshow(LH, cmap="gray")
+                    plt.title("Horizontal Detail (LH)")
+                    plt.axis('off')
+
+                # Vertical Detail (HL)
+                    plt.subplot(2, 3, 4)
+                    plt.imshow(HL, cmap="gray")
+                    plt.title("Vertical Detail (HL)")
+                    plt.axis('off')
+
+                # Diagonal Detail (HH)
+                    plt.subplot(2, 3, 5)
+                    plt.imshow(HH, cmap="gray")
+                    plt.title("Diagonal Detail (HH)")
+                    plt.axis('off')
+
+                    plt.show()
+
+        # Input window for wavelet transform
+            def get_user_input():
+                input_window = tk.Toplevel()
+                input_window.title("Wavelet Transform Selection")
+
+                tk.Label(input_window, text="Select the type of coefficients to display:").pack(padx=10, pady=5)
+
+                selection_var = tk.StringVar(value="All")
+
+                options = ["All", "LL", "LH", "HL", "HH"]
+
+                for option in options:
+                    tk.Radiobutton(input_window, text=option, variable=selection_var, value=option).pack(anchor="w", padx=10)
+
+                def apply_selection():
+                    selection = selection_var.get()
+                    input_window.destroy()
+                    perform_wavelet_transform(selection)
+
+                tk.Button(input_window, text="Apply", command=apply_selection).pack(pady=10)
+
+            get_user_input()
+
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+
+
+    def huffman_encoding(self):
+        """Unified Huffman Encoding function for text or image."""
+        try:
+        # Helper function: Build the Huffman Tree
+            def make_tree(nodes):
+                """Build the Huffman Tree."""
+                class NodeTree:
+                    def __init__(self, left=None, right=None):
+                        self.left = left
+                        self.right = right
+
+                    def children(self):
+                        return (self.left, self.right)
+
+            # ترتيب العقد حسب التردد بشكل تصاعدي
+                nodes = sorted(nodes, key=lambda x: x[1])
+
+                while len(nodes) > 1:
+                    (key1, c1) = nodes[0]
+                    (key2, c2) = nodes[1]
+                    nodes = nodes[2:]
+                    node = NodeTree(key1, key2)
+                    nodes.append((node, c1 + c2))
+                    nodes = sorted(nodes, key=lambda x: x[1])  # إعادة الترتيب بعد كل عملية دمج
+
+                return nodes[0][0]
+
+        # Helper function: Generate Huffman Codes from the tree
+            def huffman_code_tree(node, left=True, code=''):
+                """Generate Huffman Codes from the tree."""
+                if isinstance(node, (str, int, np.uint8)):
+                    return {node: code}
+                (l, r) = node.children()
+                d = dict()
+                d.update(huffman_code_tree(l, True, code + '0'))
+                d.update(huffman_code_tree(r, False, code + '1'))
+                return d
+
+        # Helper function: Display Huffman results
+            def display_huffman_results(encoding):
+                """Display Huffman Encoding results in a new window."""
+                results_window = tk.Toplevel(self.root)
+                results_window.title("Huffman Encoding Results")
+
+                tk.Label(results_window, text="Huffman Encoding Results", font=("Arial", 14, "bold")).pack(pady=10)
+
+                text_area = tk.Text(results_window, wrap="word", font=("Courier", 10), height=15, width=50)
+                text_area.pack(padx=10, pady=10)
+
+                for key, code in encoding.items():
+                    text_area.insert("end", f"'{key}': {code}\n")
+
+                text_area.config(state="disabled")
+
+        # Function for Huffman Encoding on text
+            def huffman_on_text():
+                try:
+                    user_text = simpledialog.askstring("Input Text", "Enter your text for Huffman Encoding:")
+
+                    if not user_text:
+                        messagebox.showwarning("Warning", "No text entered. Please enter some text.")
+                        return
+
+                # Calculate character frequencies
+                    txt_count = Counter(user_text)
+                    freq = [(k, v) for k, v in txt_count.items()]
+
+                # Build the Huffman Tree
+                    root = make_tree(freq)
+
+                # Generate Huffman codes
+                    encoding = huffman_code_tree(root)
+
+                # Display the results
+                    display_huffman_results(encoding)
+
+                except Exception as e:
+                    messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+        # Function for Huffman Encoding on image
+            def huffman_on_image():
+                try:
+                    if self.original_image is None:
+                        messagebox.showwarning("Warning", "No image loaded. Please load an image first.")
+                        return
+
+                # Convert image to grayscale if it's colored
+                    gray_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY) if len(self.original_image.shape) == 3 else self.original_image
+
+                # Flatten the image into a 1D array
+                    pixel_values = gray_image.flatten()
+
+                # Calculate pixel frequencies
+                    pixel_count = Counter(pixel_values)
+                    freq = [(k, v) for k, v in pixel_count.items()]
+
+                # Build the Huffman Tree
+                    root = make_tree(freq)
+
+                # Generate Huffman codes
+                    encoding = huffman_code_tree(root)
+
+                # Display the results
+                    display_huffman_results(encoding)
+
+                except Exception as e:
+                    messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+        # Main Window: Ask the user to choose Text or Image
+            menu_window = tk.Toplevel(self.root)
+            menu_window.title("Huffman Encoding")
+            tk.Label(menu_window, text="Choose Data Type for Huffman Encoding", font=("Arial", 14, "bold")).pack(pady=10)
+
+            tk.Button(menu_window, text="Text", command=lambda: [menu_window.destroy(), huffman_on_text()]).pack(pady=5)
+            tk.Button(menu_window, text="Image", command=lambda: [menu_window.destroy(), huffman_on_image()]).pack(pady=5)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+
+
+    def shannon_fano_encoding(self):
+        """Unified Shannon-Fano Encoding function for text or image."""
+        try:
+        # Helper function: Build Shannon-Fano Codes
+            def shannon_fano(nodes, prefix='', codebook={}):
+                """Recursive function to generate Shannon-Fano codes."""
+                if len(nodes) == 1:
+                    codebook[nodes[0][0]] = prefix
                     return
 
-                # Perform contrast stretching
-                img_float = self.original_image.astype(np.float32)
+            # Split nodes into two groups with nearly equal frequency sums
+                total = sum([freq for _, freq in nodes])
+                cumulative = 0
+                split_index = 0
+                for i, (_, freq) in enumerate(nodes):
+                    cumulative += freq
+                    if cumulative >= total / 2:
+                        split_index = i + 1
+                        break
 
-                # Calculate the min and max pixel intensities for stretching
-                img_min = np.min(img_float)
-                img_max = np.max(img_float)
+                left = nodes[:split_index]
+                right = nodes[split_index:]
 
-                # Stretch the image
-                stretched_image = ((img_float - img_min) / (img_max - img_min)) * (max_intensity - min_intensity) + min_intensity
-                stretched_image = np.clip(stretched_image, 0, 255).astype(np.uint8)
+            # Assign '0' to the left group and '1' to the right group
+                shannon_fano(left, prefix + '0', codebook)
+                shannon_fano(right, prefix + '1', codebook)
 
-                # Update the displayed image
-                self.image = stretched_image
-                self.display_image(self.image, self.modified_canvas)
-                stretch_window.destroy()
+                return codebook
 
-            except ValueError:
-                messagebox.showerror("Error", "Please enter valid numerical values for intensities.")
+        # Helper function: Display Shannon-Fano results
+            def display_shannon_fano_results(encoding):
+                """Display Shannon-Fano Encoding results in a new window."""
+                results_window = tk.Toplevel(self.root)
+                results_window.title("Shannon-Fano Encoding Results")
 
-        # Apply button to apply contrast stretching
-        apply_button = tk.Button(stretch_window, text="Apply", command=apply_contrast_stretch)
-        apply_button.grid(row=2, column=0, columnspan=2, pady=10)
+                tk.Label(results_window, text="Shannon-Fano Encoding Results", font=("Arial", 14, "bold")).pack(pady=10)
+
+                text_area = tk.Text(results_window, wrap="word", font=("Courier", 10), height=15, width=50)
+                text_area.pack(padx=10, pady=10)
+
+                for key, code in encoding.items():
+                    text_area.insert("end", f"'{key}': {code}\n")
+
+                text_area.config(state="disabled")
+
+        # Function for Shannon-Fano Encoding on text
+            def shannon_fano_on_text():
+                try:
+                    user_text = simpledialog.askstring("Input Text", "Enter your text for Shannon-Fano Encoding:")
+
+                    if not user_text:
+                        messagebox.showwarning("Warning", "No text entered. Please enter some text.")
+                        return
+
+                # Calculate character frequencies
+                    txt_count = Counter(user_text)
+                    freq = [(k, v) for k, v in txt_count.items()]
+
+                # Sort frequencies in descending order
+                    freq = sorted(freq, key=lambda x: x[1], reverse=True)
+
+                # Generate Shannon-Fano codes
+                    encoding = shannon_fano(freq)
+
+                # Display the results
+                    display_shannon_fano_results(encoding)
+
+                except Exception as e:
+                    messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+        # Function for Shannon-Fano Encoding on image
+            def shannon_fano_on_image():
+                try:
+                    if self.original_image is None:
+                        messagebox.showwarning("Warning", "No image loaded. Please load an image first.")
+                        return
+
+                # Convert image to grayscale if it's colored
+                    gray_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY) if len(self.original_image.shape) == 3 else self.original_image
+
+                # Flatten the image into a 1D array
+                    pixel_values = gray_image.flatten()
+
+                # Calculate pixel frequencies
+                    pixel_count = Counter(pixel_values)
+                    freq = [(k, v) for k, v in pixel_count.items()]
+
+                # Sort frequencies in descending order
+                    freq = sorted(freq, key=lambda x: x[1], reverse=True)
+
+                # Generate Shannon-Fano codes
+                    encoding = shannon_fano(freq)
+
+                # Display the results
+                    display_shannon_fano_results(encoding)
+
+                except Exception as e:
+                    messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+        # Main Window: Ask the user to choose Text or Image
+            menu_window = tk.Toplevel(self.root)
+            menu_window.title("Shannon-Fano Encoding")
+            tk.Label(menu_window, text="Choose Data Type for Shannon-Fano Encoding", font=("Arial", 14, "bold")).pack(pady=10)
+
+            tk.Button(menu_window, text="Text", command=lambda: [menu_window.destroy(), shannon_fano_on_text()]).pack(pady=5)
+            tk.Button(menu_window, text="Image", command=lambda: [menu_window.destroy(), shannon_fano_on_image()]).pack(pady=5)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+
+
+
+
+    def arithmetic_encoding(self):
+        """Perform Arithmetic Encoding on either text or image based on user choice."""
+        try:
+            import numpy as np
+            from PIL import Image
+            import tkinter as tk
+            from tkinter import simpledialog, Toplevel, Label, Text, Button, messagebox
+
+        # لحساب احتمالات الرموز
+            def calculate_probabilities(data):
+                unique, counts = np.unique(data, return_counts=True)
+                total = np.sum(counts)
+                probabilities = counts / total
+                return dict(zip(unique, probabilities))
+
+        # لحساب الفواصل التراكمية
+            def compute_intervals(probabilities):
+                intervals = {}
+                low = 0.0
+                for symbol, prob in sorted(probabilities.items()):
+                    high = low + prob
+                    intervals[symbol] = (low, high)
+                    low = high
+                return intervals
+
+        # التشفير الحسابي
+            def arithmetic_encode(data, intervals):
+                low = 0.0
+                high = 1.0
+                for symbol in data:
+                    symbol_low, symbol_high = intervals[symbol]
+                    range_width = high - low
+                    high = low + range_width * symbol_high
+                    low = low + range_width * symbol_low
+                return low
+
+        # عرض النتائج في نافذة منفصلة
+            def display_results(encoded_value, probabilities, intervals):
+                result_window = Toplevel(self.root)
+                result_window.title("Arithmetic Encoding Results")
+
+                Label(result_window, text="Arithmetic Encoding Results", font=("Arial", 14, "bold")).pack(pady=10)
+
+                text_area = Text(result_window, wrap="word", font=("Courier", 10), height=20, width=60)
+                text_area.pack(padx=10, pady=10)
+
+            # عرض القيم المشفرة
+                text_area.insert("end", f"Encoded Value: {encoded_value}\n\n")
+                text_area.insert("end", "Probabilities:\n")
+                for symbol, prob in probabilities.items():
+                    text_area.insert("end", f"'{symbol}': {prob:.6f}\n")
+
+                text_area.insert("end", "\nIntervals:\n")
+                for symbol, (low, high) in intervals.items():
+                    text_area.insert("end", f"'{symbol}': ({low:.6f}, {high:.6f})\n")
+
+                text_area.config(state="disabled")
+
+        # معالجة النصوص
+            def process_text():
+                user_text = simpledialog.askstring("Input Text", "Enter text for Arithmetic Encoding:")
+                if not user_text:
+                    messagebox.showwarning("Warning", "No text entered. Please enter some text.")
+                    return
+
+                data = list(user_text)
+                probabilities = calculate_probabilities(data)
+                intervals = compute_intervals(probabilities)
+                encoded_value = arithmetic_encode(data, intervals)
+
+                display_results(encoded_value, probabilities, intervals)
+
+        # معالجة الصور
+            def process_image():
+                if self.original_image is None:
+                    messagebox.showwarning("Warning", "No image loaded. Please load an image first.")
+                    return
+
+            # تحويل الصورة إلى تدرج رمادي إذا كانت ملونة
+                gray_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY) if len(self.original_image.shape) == 3 else self.original_image
+                image_data = gray_image.flatten()
+
+                probabilities = calculate_probabilities(image_data)
+                intervals = compute_intervals(probabilities)
+                encoded_value = arithmetic_encode(image_data, intervals)
+
+                display_results(encoded_value, probabilities, intervals)
+
+        # نافذة اختيار نوع البيانات
+            def choose_data_type():
+                menu_window = Toplevel(self.root)
+                menu_window.title("Arithmetic Encoding")
+                Label(menu_window, text="Choose Data Type for Arithmetic Encoding", font=("Arial", 14, "bold")).pack(pady=10)
+
+                Button(menu_window, text="Text", command=lambda: [menu_window.destroy(), process_text()]).pack(pady=5)
+                Button(menu_window, text="Image", command=lambda: [menu_window.destroy(), process_image()]).pack(pady=5)
+
+        # استدعاء نافذة الاختيار
+            choose_data_type()
+
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+
+    # def show_histogram_gray(self):
+    #     if self.original_image is None:
+    #         messagebox.showwarning("Warning", "Please load an image first.")
+    #         return
+    
+    # # Convert the original image to grayscale
+    #     gray_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
+    
+    # # Calculate the histogram
+    #     histogram = cv2.calcHist([gray_image], [0], None, [256], [0, 256])
+    
+    # # Plot the histogram using matplotlib
+    #     plt.figure("Gray Histogram")
+    #     plt.title("Grayscale Histogram")
+    #     plt.xlabel("Pixel Intensity")
+    #     plt.ylabel("Frequency")
+    #     plt.plot(histogram, color='gray')
+    #     plt.xlim([0, 256])
+    #     plt.grid(True)
+    #     plt.show()
+
+    # def show_histogram_rgb(self):
+    #     if self.original_image is None:
+    #         messagebox.showwarning("Warning", "Please load an image first.")
+    #         return
+        
+    #     # Split the original image into its Red, Green, and Blue channels
+    #     channels = cv2.split(self.original_image)
+    #     colors = ('b', 'g', 'r')  # Corresponding colors for the histogram
+    #     labels = ('Blue', 'Green', 'Red')
+
+    #     # Plot the histograms for each channel
+    #     plt.figure("RGB Histogram")
+    #     plt.title("RGB Histogram")
+    #     plt.xlabel("Pixel Intensity")
+    #     plt.ylabel("Frequency")
+
+    #     for channel, color, label in zip(channels, colors, labels):
+    #         # Calculate the histogram for the channel
+    #         histogram = cv2.calcHist([channel], [0], None, [256], [0, 256])
+    #         # Plot the histogram
+    #         plt.plot(histogram, color=color, label=label)
+
+    #     plt.xlim([0, 256])
+    #     plt.legend()  # Add legend to differentiate channels
+    #     plt.grid(True)
+    #     plt.show()
+
+
+
+    # def histogram_equalization(self):
+    #     if self.original_image is None:
+    #         messagebox.showwarning("Warning", "Please load an image first.")
+    #         return
+
+    # # Convert the original image to YCrCb color space
+    #     ycrcb_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2YCrCb)
+    
+    # # Split the channels
+    #     y_channel, cr_channel, cb_channel = cv2.split(ycrcb_image)
+    
+    # # Equalize the Y channel (luminance)
+    #     equalized_y_channel = cv2.equalizeHist(y_channel)
+    
+    # # Merge the channels back
+    #     equalized_image = cv2.merge((equalized_y_channel, cr_channel, cb_channel))
+    
+    # # Convert back to BGR color space
+    #     equalized_image_bgr = cv2.cvtColor(equalized_image, cv2.COLOR_YCrCb2BGR)
+    
+    # # Update the displayed image
+    #     self.image = equalized_image_bgr
+    #     self.display_image(self.image, self.modified_canvas)
+    
+
+
+
+    # def contrast_stretching(self):
+    #     if self.original_image is None:
+    #         messagebox.showwarning("Warning", "Please load an image first.")
+    #         return
+
+    #     # Create a new window to get input min and max pixel values
+    #     stretch_window = tk.Toplevel(self.root)
+    #     stretch_window.title("Contrast Stretching Parameters")
+
+    #     # Labels and input entries for min and max values
+    #     tk.Label(stretch_window, text="Min Intensity (default: 0):").grid(row=0, column=0, padx=10, pady=5)
+    #     min_entry = tk.Entry(stretch_window)
+    #     min_entry.grid(row=0, column=1, padx=10, pady=5)
+    #     min_entry.insert(0, "0")  # Default value
+
+    #     tk.Label(stretch_window, text="Max Intensity (default: 255):").grid(row=1, column=0, padx=10, pady=5)
+    #     max_entry = tk.Entry(stretch_window)
+    #     max_entry.grid(row=1, column=1, padx=10, pady=5)
+    #     max_entry.insert(0, "255")  # Default value
+
+    #     def apply_contrast_stretch():
+    #         try:
+    #             # Parse input values
+    #             min_intensity = int(min_entry.get())
+    #             max_intensity = int(max_entry.get())
+
+    #             if min_intensity < 0 or max_intensity > 255 or min_intensity >= max_intensity:
+    #                 messagebox.showerror("Error", "Invalid intensity range. Must be between 0 and 255, and Min < Max.")
+    #                 return
+
+    #             # Perform contrast stretching
+    #             img_float = self.original_image.astype(np.float32)
+
+    #             # Calculate the min and max pixel intensities for stretching
+    #             img_min = np.min(img_float)
+    #             img_max = np.max(img_float)
+
+    #             # Stretch the image
+    #             stretched_image = ((img_float - img_min) / (img_max - img_min)) * (max_intensity - min_intensity) + min_intensity
+    #             stretched_image = np.clip(stretched_image, 0, 255).astype(np.uint8)
+
+    #             # Update the displayed image
+    #             self.image = stretched_image
+    #             self.display_image(self.image, self.modified_canvas)
+    #             stretch_window.destroy()
+
+    #         except ValueError:
+    #             messagebox.showerror("Error", "Please enter valid numerical values for intensities.")
+
+    #     # Apply button to apply contrast stretching
+    #     apply_button = tk.Button(stretch_window, text="Apply", command=apply_contrast_stretch)
+    #     apply_button.grid(row=2, column=0, columnspan=2, pady=10)
 
 
     def thresholding(self):
@@ -522,544 +1752,544 @@ class ImageProcessingApp:
         tk.Button(mode_window, text="Automatic Thresholding (Otsu)", width=25, command=lambda: [automatic_thresholding(), mode_window.destroy()]).pack(pady=5)
 
 
-    def negative_transformation(self):
-        if self.original_image is None:
-            messagebox.showwarning("Warning", "Please load an image first.")
-            return
+    # def negative_transformation(self):
+    #     if self.original_image is None:
+    #         messagebox.showwarning("Warning", "Please load an image first.")
+    #         return
 
-        # Perform negative transformation
-        negative_image = 255 - self.original_image
+    #     # Perform negative transformation
+    #     negative_image = 255 - self.original_image
 
-        # Update the image and display the result
-        self.image = negative_image
-        self.display_image(self.image, self.modified_canvas)
+    #     # Update the image and display the result
+    #     self.image = negative_image
+    #     self.display_image(self.image, self.modified_canvas)
 
 
-    def log_transformation(self):
-        if self.original_image is None:
-            messagebox.showwarning("Warning", "Please load an image first.")
-            return
+    # def log_transformation(self):
+    #     if self.original_image is None:
+    #         messagebox.showwarning("Warning", "Please load an image first.")
+    #         return
 
-        # Convert the original image to a float32 type for computation
-        image_float = self.original_image.astype(np.float32)
+    #     # Convert the original image to a float32 type for computation
+    #     image_float = self.original_image.astype(np.float32)
 
-        # Perform log transformation: s = c * log(1 + r)
-        c = 255 / np.log(1 + np.max(image_float))  # Scaling constant
-        log_image = c * np.log(1 + image_float)
+    #     # Perform log transformation: s = c * log(1 + r)
+    #     c = 255 / np.log(1 + np.max(image_float))  # Scaling constant
+    #     log_image = c * np.log(1 + image_float)
 
-        # Clip the values to the valid range [0, 255] and convert back to uint8
-        log_image = np.clip(log_image, 0, 255).astype(np.uint8)
+    #     # Clip the values to the valid range [0, 255] and convert back to uint8
+    #     log_image = np.clip(log_image, 0, 255).astype(np.uint8)
 
-        # Update the image and display the result
-        self.image = log_image
-        self.display_image(self.image, self.modified_canvas)
+    #     # Update the image and display the result
+    #     self.image = log_image
+    #     self.display_image(self.image, self.modified_canvas)
 
 
 
 
-    def power_law_transformation(self):
-        if self.original_image is None:
-            messagebox.showwarning("Warning", "Please load an image first.")
-            return
+    # def power_law_transformation(self):
+    #     if self.original_image is None:
+    #         messagebox.showwarning("Warning", "Please load an image first.")
+    #         return
 
-        # Create a new window to input the gamma value
-        gamma_window = tk.Toplevel(self.root)
-        gamma_window.title("Power-Law Transformation (Gamma Correction)")
+    #     # Create a new window to input the gamma value
+    #     gamma_window = tk.Toplevel(self.root)
+    #     gamma_window.title("Power-Law Transformation (Gamma Correction)")
 
-        # Label and Entry for gamma input
-        tk.Label(gamma_window, text="Enter Gamma Value (e.g., 0.5 for brightening, >1 for darkening):").grid(row=0, column=0, padx=10, pady=5)
-        gamma_entry = tk.Entry(gamma_window)
-        gamma_entry.grid(row=0, column=1, padx=10, pady=5)
+    #     # Label and Entry for gamma input
+    #     tk.Label(gamma_window, text="Enter Gamma Value (e.g., 0.5 for brightening, >1 for darkening):").grid(row=0, column=0, padx=10, pady=5)
+    #     gamma_entry = tk.Entry(gamma_window)
+    #     gamma_entry.grid(row=0, column=1, padx=10, pady=5)
 
-        def apply_gamma():
-            try:
-                gamma = float(gamma_entry.get())
-                if gamma <= 0:
-                    messagebox.showerror("Error", "Gamma value must be greater than 0.")
-                    return
+    #     def apply_gamma():
+    #         try:
+    #             gamma = float(gamma_entry.get())
+    #             if gamma <= 0:
+    #                 messagebox.showerror("Error", "Gamma value must be greater than 0.")
+    #                 return
 
-                # Normalize the image to the range [0, 1]
-                normalized_image = self.original_image.astype(np.float32) / 255.0
+    #             # Normalize the image to the range [0, 1]
+    #             normalized_image = self.original_image.astype(np.float32) / 255.0
 
-                # Apply the power-law transformation
-                gamma_corrected_image = np.power(normalized_image, gamma)
+    #             # Apply the power-law transformation
+    #             gamma_corrected_image = np.power(normalized_image, gamma)
 
-                # Scale back to [0, 255] and convert to uint8
-                gamma_corrected_image = (gamma_corrected_image * 255).clip(0, 255).astype(np.uint8)
+    #             # Scale back to [0, 255] and convert to uint8
+    #             gamma_corrected_image = (gamma_corrected_image * 255).clip(0, 255).astype(np.uint8)
 
-                # Update the image and display the result
-                self.image = gamma_corrected_image
-                self.display_image(self.image, self.modified_canvas)
+    #             # Update the image and display the result
+    #             self.image = gamma_corrected_image
+    #             self.display_image(self.image, self.modified_canvas)
 
-                # Close the gamma input window
-                gamma_window.destroy()
+    #             # Close the gamma input window
+    #             gamma_window.destroy()
 
-            except ValueError:
-                messagebox.showerror("Error", "Please enter a valid numerical gamma value.")
+    #         except ValueError:
+    #             messagebox.showerror("Error", "Please enter a valid numerical gamma value.")
 
-        # Apply button
-        apply_button = tk.Button(gamma_window, text="Apply", command=apply_gamma)
-        apply_button.grid(row=1, column=0, columnspan=2, pady=10)
+    #     # Apply button
+    #     apply_button = tk.Button(gamma_window, text="Apply", command=apply_gamma)
+    #     apply_button.grid(row=1, column=0, columnspan=2, pady=10)
 
 
-    def apply_gaussian_blur(self):
-        if self.original_image is None:
-            messagebox.showwarning("Warning", "Please load an image first.")
-            return
+    # def apply_gaussian_blur(self):
+    #     if self.original_image is None:
+    #         messagebox.showwarning("Warning", "Please load an image first.")
+    #         return
 
-        # Create a new window to get the kernel size
-        blur_window = tk.Toplevel(self.root)
-        blur_window.title("Gaussian Blur Parameters")
+    #     # Create a new window to get the kernel size
+    #     blur_window = tk.Toplevel(self.root)
+    #     blur_window.title("Gaussian Blur Parameters")
 
-        # Labels and entries for kernel size (odd numbers only)
-        tk.Label(blur_window, text="Kernel Size (Odd Number, e.g., 3, 5, 7):").grid(row=0, column=0, padx=10, pady=5)
-        kernel_entry = tk.Entry(blur_window)
-        kernel_entry.grid(row=0, column=1, padx=10, pady=5)
-        kernel_entry.insert(0, "5")  # Default kernel size is 5
+    #     # Labels and entries for kernel size (odd numbers only)
+    #     tk.Label(blur_window, text="Kernel Size (Odd Number, e.g., 3, 5, 7):").grid(row=0, column=0, padx=10, pady=5)
+    #     kernel_entry = tk.Entry(blur_window)
+    #     kernel_entry.grid(row=0, column=1, padx=10, pady=5)
+    #     kernel_entry.insert(0, "5")  # Default kernel size is 5
 
-        def apply_blur():
-            try:
-                # Parse and validate the kernel size
-                kernel_size = int(kernel_entry.get())
-                if kernel_size <= 0 or kernel_size % 2 == 0:
-                    messagebox.showerror("Error", "Kernel size must be a positive odd number.")
-                    return
-
-                # Apply Gaussian blur
-                blurred_image = cv2.GaussianBlur(self.original_image, (kernel_size, kernel_size), 0)
-
-                # Update the image and display the result
-                self.image = blurred_image
-                self.display_image(self.image, self.modified_canvas)
-
-                blur_window.destroy()
-            except ValueError:
-                messagebox.showerror("Error", "Please enter a valid integer for kernel size.")
-
-        # Apply button to perform Gaussian blur
-        tk.Button(blur_window, text="Apply", command=apply_blur).grid(row=1, column=0, columnspan=2, pady=10)
-
-
-    def apply_average_blur(self):
-        if self.original_image is None:
-            messagebox.showwarning("Warning", "Please load an image first.")
-            return
-
-        # Create a new window to get the kernel size
-        blur_window = tk.Toplevel(self.root)
-        blur_window.title("Average Blur Parameters")
-
-        # Labels and entries for kernel size (odd numbers only)
-        tk.Label(blur_window, text="Kernel Size (Odd Number, e.g., 3, 5, 7):").grid(row=0, column=0, padx=10, pady=5)
-        kernel_entry = tk.Entry(blur_window)
-        kernel_entry.grid(row=0, column=1, padx=10, pady=5)
-        kernel_entry.insert(0, "5")  # Default kernel size is 5
+    #     def apply_blur():
+    #         try:
+    #             # Parse and validate the kernel size
+    #             kernel_size = int(kernel_entry.get())
+    #             if kernel_size <= 0 or kernel_size % 2 == 0:
+    #                 messagebox.showerror("Error", "Kernel size must be a positive odd number.")
+    #                 return
+
+    #             # Apply Gaussian blur
+    #             blurred_image = cv2.GaussianBlur(self.original_image, (kernel_size, kernel_size), 0)
+
+    #             # Update the image and display the result
+    #             self.image = blurred_image
+    #             self.display_image(self.image, self.modified_canvas)
+
+    #             blur_window.destroy()
+    #         except ValueError:
+    #             messagebox.showerror("Error", "Please enter a valid integer for kernel size.")
+
+    #     # Apply button to perform Gaussian blur
+    #     tk.Button(blur_window, text="Apply", command=apply_blur).grid(row=1, column=0, columnspan=2, pady=10)
+
+
+    # def apply_average_blur(self):
+    #     if self.original_image is None:
+    #         messagebox.showwarning("Warning", "Please load an image first.")
+    #         return
+
+    #     # Create a new window to get the kernel size
+    #     blur_window = tk.Toplevel(self.root)
+    #     blur_window.title("Average Blur Parameters")
+
+    #     # Labels and entries for kernel size (odd numbers only)
+    #     tk.Label(blur_window, text="Kernel Size (Odd Number, e.g., 3, 5, 7):").grid(row=0, column=0, padx=10, pady=5)
+    #     kernel_entry = tk.Entry(blur_window)
+    #     kernel_entry.grid(row=0, column=1, padx=10, pady=5)
+    #     kernel_entry.insert(0, "5")  # Default kernel size is 5
 
-        def apply_blur():
-            try:
-                # Parse and validate the kernel size
-                kernel_size = int(kernel_entry.get())
-                if kernel_size <= 0 or kernel_size % 2 == 0:
-                    messagebox.showerror("Error", "Kernel size must be a positive odd number.")
-                    return
-
-                # Apply Average blur
-                blurred_image = cv2.blur(self.original_image, (kernel_size, kernel_size))
-
-                # Update the image and display the result
-                self.image = blurred_image
-                self.display_image(self.image, self.modified_canvas)
-
-                blur_window.destroy()
-            except ValueError:
-                messagebox.showerror("Error", "Please enter a valid integer for kernel size.")
-
-        # Apply button to perform average blur
-        tk.Button(blur_window, text="Apply", command=apply_blur).grid(row=1, column=0, columnspan=2, pady=10)
-
-
-    def apply_median_blur(self):
-        if self.original_image is None:
-            messagebox.showwarning("Warning", "Please load an image first.")
-            return
-
-        # Create a new window to get the kernel size
-        blur_window = tk.Toplevel(self.root)
-        blur_window.title("Median Blur Parameters")
-
-        # Label and entry for kernel size (odd numbers only)
-        tk.Label(blur_window, text="Kernel Size (Odd Number, e.g., 3, 5, 7):").grid(row=0, column=0, padx=10, pady=5)
-        kernel_entry = tk.Entry(blur_window)
-        kernel_entry.grid(row=0, column=1, padx=10, pady=5)
-        kernel_entry.insert(0, "5")  # Default kernel size is 5
-
-        def apply_blur():
-            try:
-                # Parse and validate the kernel size
-                kernel_size = int(kernel_entry.get())
-                if kernel_size <= 0 or kernel_size % 2 == 0:
-                    messagebox.showerror("Error", "Kernel size must be a positive odd number.")
-                    return
-
-                # Apply Median blur
-                blurred_image = cv2.medianBlur(self.original_image, kernel_size)
-
-                # Update the image and display the result
-                self.image = blurred_image
-                self.display_image(self.image, self.modified_canvas)
-
-                blur_window.destroy()
-            except ValueError:
-                messagebox.showerror("Error", "Please enter a valid integer for kernel size.")
-
-        # Apply button to perform median blur
-        tk.Button(blur_window, text="Apply", command=apply_blur).grid(row=1, column=0, columnspan=2, pady=10)
-
-
-    def apply_max_blur(self):
-        if self.original_image is None:
-            messagebox.showwarning("Warning", "Please load an image first.")
-            return
-
-    # Create a new window to get the kernel size
-        blur_window = tk.Toplevel(self.root)
-        blur_window.title("Max Blur Parameters")
-
-    # Label and entry for kernel size (must be odd numbers)
-        tk.Label(blur_window, text="Kernel Size (Odd Number, e.g., 31, 51, 101):").grid(row=0, column=0, padx=10, pady=5)
-        kernel_entry = tk.Entry(blur_window)
-        kernel_entry.grid(row=0, column=1, padx=10, pady=5)
-        kernel_entry.insert(0, "51")  # Default kernel size is 51
-
-        def apply_blur():
-            try:
-            # Parse and validate the kernel size
-                kernel_size = int(kernel_entry.get())
-                if kernel_size <= 0 or kernel_size % 2 == 0:
-                    messagebox.showerror("Error", "Kernel size must be a positive odd number.")
-                    return
-
-            # Apply Gaussian Blur with a very large kernel
-                blurred_image = cv2.GaussianBlur(self.original_image, (kernel_size, kernel_size), 0)
-
-            # Update the image and display the result
-                self.image = blurred_image
-                self.display_image(self.image, self.modified_canvas)
-
-                blur_window.destroy()
-            except ValueError:
-                messagebox.showerror("Error", "Please enter a valid integer for kernel size.")
-
-    # Apply button to perform max blur
-        tk.Button(blur_window, text="Apply", command=apply_blur).grid(row=1, column=0, columnspan=2, pady=10)
-
-
-    def apply_min_blur(self):
-        if self.original_image is None:
-            messagebox.showwarning("Warning", "Please load an image first.")
-            return
-
-    # Create a new window to get the kernel size
-        blur_window = tk.Toplevel(self.root)
-        blur_window.title("Min Blur Parameters")
-
-    # Label and entry for kernel size (must be odd numbers)
-        tk.Label(blur_window, text="Kernel Size (Odd Number, e.g., 3, 5, 7):").grid(row=0, column=0, padx=10, pady=5)
-        kernel_entry = tk.Entry(blur_window)
-        kernel_entry.grid(row=0, column=1, padx=10, pady=5)
-        kernel_entry.insert(0, "3")  # Default kernel size is 3
-
-        def apply_blur():
-            try:
-            # Parse and validate the kernel size
-                kernel_size = int(kernel_entry.get())
-                if kernel_size <= 0 or kernel_size % 2 == 0:
-                    messagebox.showerror("Error", "Kernel size must be a positive odd number.")
-                    return
-
-            # Apply Gaussian Blur with a very small kernel
-                blurred_image = cv2.GaussianBlur(self.original_image, (kernel_size, kernel_size), 0)
-
-            # Update the image and display the result
-                self.image = blurred_image
-                self.display_image(self.image, self.modified_canvas)
-
-                blur_window.destroy()
-            except ValueError:
-                messagebox.showerror("Error", "Please enter a valid integer for kernel size.")
-
-    # Apply button to perform min blur
-        tk.Button(blur_window, text="Apply", command=apply_blur).grid(row=1, column=0, columnspan=2, pady=10)
-
-    def apply_max_blur(self):
-        if self.original_image is None:
-            messagebox.showwarning("Warning", "Please load an image first.")
-            return
-
-    # Create a new window to get the kernel size
-        blur_window = tk.Toplevel(self.root)
-        blur_window.title("Max Blur Parameters")
-
-    # Label and entry for kernel size (must be odd numbers)
-        tk.Label(blur_window, text="Kernel Size (Odd Number, e.g., 31, 51, 101):").grid(row=0, column=0, padx=10, pady=5)
-        kernel_entry = tk.Entry(blur_window)
-        kernel_entry.grid(row=0, column=1, padx=10, pady=5)
-        kernel_entry.insert(0, "51")  # Default kernel size is 51
-
-        def apply_blur():
-            try:
-            # Parse and validate the kernel size
-                kernel_size = int(kernel_entry.get())
-                if kernel_size <= 0 or kernel_size % 2 == 0:
-                    messagebox.showerror("Error", "Kernel size must be a positive odd number.")
-                    return
-
-            # Apply Gaussian Blur with a very large kernel
-                blurred_image = cv2.GaussianBlur(self.original_image, (kernel_size, kernel_size), 0)
-
-            # Update the image and display the result
-                self.image = blurred_image
-                self.display_image(self.image, self.modified_canvas)
-
-                blur_window.destroy()
-            except ValueError:
-                messagebox.showerror("Error", "Please enter a valid integer for kernel size.")
-
-    # Apply button to perform max blur
-        tk.Button(blur_window, text="Apply", command=apply_blur).grid(row=1, column=0, columnspan=2, pady=10)
-
-
-    def add_gaussian_noise(self):
-        if self.original_image is None:
-            messagebox.showwarning("Warning", "Please load an image first.")
-            return
-
-    # Create a new window to get the noise parameters
-        noise_window = tk.Toplevel(self.root)
-        noise_window.title("Gaussian Noise Parameters")
-
-    # Label and entry for mean and standard deviation
-        tk.Label(noise_window, text="Mean (e.g., 0):").grid(row=0, column=0, padx=10, pady=5)
-        mean_entry = tk.Entry(noise_window)
-        mean_entry.grid(row=0, column=1, padx=10, pady=5)
-        mean_entry.insert(0, "0")
-
-        tk.Label(noise_window, text="Standard Deviation (e.g., 25):").grid(row=1, column=0, padx=10, pady=5)
-        std_dev_entry = tk.Entry(noise_window)
-        std_dev_entry.grid(row=1, column=1, padx=10, pady=5)
-        std_dev_entry.insert(0, "25")
-
-        def apply_noise():
-            try:
-            # Parse and validate the mean and standard deviation
-                mean = float(mean_entry.get())
-                std_dev = float(std_dev_entry.get())
-
-            # Generate Gaussian noise
-                noise = np.random.normal(mean, std_dev, self.original_image.shape).astype(np.float32)
-
-            # Add noise to the original image
-                noisy_image = cv2.add(self.original_image.astype(np.float32), noise)
-                noisy_image = np.clip(noisy_image, 0, 255).astype(np.uint8)
-
-            # Update the image and display the result
-                self.image = noisy_image
-                self.display_image(self.image, self.modified_canvas)
-
-                noise_window.destroy()
-            except ValueError:
-                messagebox.showerror("Error", "Please enter valid numbers for mean and standard deviation.")
-
-    # Apply button to add Gaussian noise
-        tk.Button(noise_window, text="Apply", command=apply_noise).grid(row=2, column=0, columnspan=2, pady=10)
-
-    def add_salt_pepper_noise(self):
-        if self.original_image is None:
-            messagebox.showwarning("Warning", "Please load an image first.")
-            return
-
-    # Create a new window to get the noise parameters
-        noise_window = tk.Toplevel(self.root)
-        noise_window.title("Salt and Pepper Noise Parameters")
-
-    # Label and entry for noise ratio
-        tk.Label(noise_window, text="Noise Ratio (e.g., 0.05 for 5%):").grid(row=0, column=0, padx=10, pady=5)
-        ratio_entry = tk.Entry(noise_window)
-        ratio_entry.grid(row=0, column=1, padx=10, pady=5)
-        ratio_entry.insert(0, "0.05")
-
-        def apply_noise():
-            try:
-            # Parse and validate the noise ratio
-                noise_ratio = float(ratio_entry.get())
-                if not (0 <= noise_ratio <= 1):
-                    messagebox.showerror("Error", "Noise ratio must be between 0 and 1.")
-                    return
-
-            # Generate salt and pepper noise
-                noisy_image = self.original_image.copy()
-                num_salt = int(noise_ratio * noisy_image.size * 0.5)
-                num_pepper = int(noise_ratio * noisy_image.size * 0.5)
-
-            # Add salt noise (white pixels)
-                coords = [
-                    np.random.randint(0, i - 1, num_salt) for i in noisy_image.shape[:2]
-                ]
-                noisy_image[coords[0], coords[1]] = 255
-
-            # Add pepper noise (black pixels)
-                coords = [
-                    np.random.randint(0, i - 1, num_pepper) for i in noisy_image.shape[:2]
-                ]
-                noisy_image[coords[0], coords[1]] = 0
-
-            # Update the image and display the result
-                self.image = noisy_image
-                self.display_image(self.image, self.modified_canvas)
-
-                noise_window.destroy()
-            except ValueError:
-                messagebox.showerror("Error", "Please enter a valid number for noise ratio.")
-
-    # Apply button to add salt and pepper noise
-        tk.Button(noise_window, text="Apply", command=apply_noise).grid(row=1, column=0, columnspan=2, pady=10)
-
-    def sharpening_filters(self):
-        if self.original_image is None:
-            messagebox.showwarning("Warning", "Please load an image first.")
-            return
-
-    # Create a new window to get kernel dimensions and values
-        sharpen_window = tk.Toplevel(self.root)
-        sharpen_window.title("Sharpening Kernel Parameters")
-
-    # Label and entry for kernel rows
-        tk.Label(sharpen_window, text="Kernel Rows:").grid(row=0, column=0, padx=10, pady=5)
-        rows_entry = tk.Entry(sharpen_window)
-        rows_entry.grid(row=0, column=1, padx=10, pady=5)
-        rows_entry.insert(0, "3")  # Default rows
-
-    # Label and entry for kernel columns
-        tk.Label(sharpen_window, text="Kernel Columns:").grid(row=1, column=0, padx=10, pady=5)
-        cols_entry = tk.Entry(sharpen_window)
-        cols_entry.grid(row=1, column=1, padx=10, pady=5)
-        cols_entry.insert(0, "3")  # Default columns
-
-        def apply_custom_kernel():
-            try:
-            # Parse kernel dimensions
-                rows = int(rows_entry.get())
-                cols = int(cols_entry.get())
-
-                if rows <= 0 or cols <= 0:
-                    messagebox.showerror("Error", "Kernel dimensions must be positive integers.")
-                    return
-
-            # Create a new window to input kernel values
-                kernel_window = tk.Toplevel(self.root)
-                kernel_window.title("Kernel Values")
-
-            # Create entry fields for each kernel value
-                kernel_entries = []
-                for i in range(rows):
-                    row_entries = []
-                    for j in range(cols):
-                        entry = tk.Entry(kernel_window, width=5)
-                        entry.grid(row=i, column=j, padx=5, pady=5)
-                        row_entries.append(entry)
-                    kernel_entries.append(row_entries)
-
-                def apply_kernel():
-                    try:
-                    # Read kernel values from entries
-                        kernel = np.zeros((rows, cols), dtype=float)
-                        for i in range(rows):
-                            for j in range(cols):
-                                kernel[i, j] = float(kernel_entries[i][j].get())
-
-                    # Apply sharpening filter
-                        sharpened_image = cv2.filter2D(self.original_image, -1, kernel)
-
-                    # Update the image and display the result
-                        self.image = sharpened_image
-                        self.display_image(self.image, self.modified_canvas)
-
-                        kernel_window.destroy()
-                        sharpen_window.destroy()
-                    except ValueError:
-                        messagebox.showerror("Error", "Please enter valid numbers for all kernel values.")
-
-            # Apply button to process kernel
-                tk.Button(kernel_window, text="Apply", command=apply_kernel).grid(row=rows, column=0, columnspan=cols, pady=10)
-
-            except ValueError:
-                messagebox.showerror("Error", "Please enter valid integers for kernel dimensions.")
-
-    # Next button to define kernel values
-        tk.Button(sharpen_window, text="Next", command=apply_custom_kernel).grid(row=2, column=0, columnspan=2, pady=10)
-
-
-    def sobel_edge_detection(self):
-        if self.original_image is None:
-            messagebox.showwarning("Warning", "Please load an image first.")
-            return
-
-    # Convert image to grayscale if it isn't already
-        gray_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
-
-    # Apply Sobel edge detection
-        sobel_x = cv2.Sobel(gray_image, cv2.CV_64F, 1, 0, ksize=3)  # Gradient in x-direction
-        sobel_y = cv2.Sobel(gray_image, cv2.CV_64F, 0, 1, ksize=3)  # Gradient in y-direction
-
-    # Combine the gradients
-        sobel_combined = cv2.magnitude(sobel_x, sobel_y)
-        sobel_combined = np.uint8(np.clip(sobel_combined, 0, 255))
-
-    # Update the image and display the result
-        self.image = sobel_combined
-        self.display_image(self.image, self.modified_canvas)
-
-
-    def canny_edge_detection(self):
-        if self.original_image is None:
-            messagebox.showwarning("Warning", "Please load an image first.")
-            return
-
-    # Create a new window to get Canny parameters
-        canny_window = tk.Toplevel(self.root)
-        canny_window.title("Canny Edge Detection Parameters")
-
-    # Label and entry for lower threshold
-        tk.Label(canny_window, text="Lower Threshold:").grid(row=0, column=0, padx=10, pady=5)
-        lower_thresh_entry = tk.Entry(canny_window)
-        lower_thresh_entry.grid(row=0, column=1, padx=10, pady=5)
-        lower_thresh_entry.insert(0, "50")
-
-    # Label and entry for upper threshold
-        tk.Label(canny_window, text="Upper Threshold:").grid(row=1, column=0, padx=10, pady=5)
-        upper_thresh_entry = tk.Entry(canny_window)
-        upper_thresh_entry.grid(row=1, column=1, padx=10, pady=5)
-        upper_thresh_entry.insert(0, "150")
-
-        def apply_canny():
-            try:
-            # Parse thresholds
-                lower_thresh = int(lower_thresh_entry.get())
-                upper_thresh = int(upper_thresh_entry.get())
-
-            # Apply Canny edge detection
-                edges = cv2.Canny(self.original_image, lower_thresh, upper_thresh)
-
-            # Update the image and display the result
-                self.image = edges
-                self.display_image(self.image, self.modified_canvas)
-
-                canny_window.destroy()
-            except ValueError:
-                messagebox.showerror("Error", "Please enter valid integers for thresholds.")
-
-    # Apply button to perform Canny edge detection
-        tk.Button(canny_window, text="Apply", command=apply_canny).grid(row=2, column=0, columnspan=2, pady=10)
+    #     def apply_blur():
+    #         try:
+    #             # Parse and validate the kernel size
+    #             kernel_size = int(kernel_entry.get())
+    #             if kernel_size <= 0 or kernel_size % 2 == 0:
+    #                 messagebox.showerror("Error", "Kernel size must be a positive odd number.")
+    #                 return
+
+    #             # Apply Average blur
+    #             blurred_image = cv2.blur(self.original_image, (kernel_size, kernel_size))
+
+    #             # Update the image and display the result
+    #             self.image = blurred_image
+    #             self.display_image(self.image, self.modified_canvas)
+
+    #             blur_window.destroy()
+    #         except ValueError:
+    #             messagebox.showerror("Error", "Please enter a valid integer for kernel size.")
+
+    #     # Apply button to perform average blur
+    #     tk.Button(blur_window, text="Apply", command=apply_blur).grid(row=1, column=0, columnspan=2, pady=10)
+
+
+    # def apply_median_blur(self):
+    #     if self.original_image is None:
+    #         messagebox.showwarning("Warning", "Please load an image first.")
+    #         return
+
+    #     # Create a new window to get the kernel size
+    #     blur_window = tk.Toplevel(self.root)
+    #     blur_window.title("Median Blur Parameters")
+
+    #     # Label and entry for kernel size (odd numbers only)
+    #     tk.Label(blur_window, text="Kernel Size (Odd Number, e.g., 3, 5, 7):").grid(row=0, column=0, padx=10, pady=5)
+    #     kernel_entry = tk.Entry(blur_window)
+    #     kernel_entry.grid(row=0, column=1, padx=10, pady=5)
+    #     kernel_entry.insert(0, "5")  # Default kernel size is 5
+
+    #     def apply_blur():
+    #         try:
+    #             # Parse and validate the kernel size
+    #             kernel_size = int(kernel_entry.get())
+    #             if kernel_size <= 0 or kernel_size % 2 == 0:
+    #                 messagebox.showerror("Error", "Kernel size must be a positive odd number.")
+    #                 return
+
+    #             # Apply Median blur
+    #             blurred_image = cv2.medianBlur(self.original_image, kernel_size)
+
+    #             # Update the image and display the result
+    #             self.image = blurred_image
+    #             self.display_image(self.image, self.modified_canvas)
+
+    #             blur_window.destroy()
+    #         except ValueError:
+    #             messagebox.showerror("Error", "Please enter a valid integer for kernel size.")
+
+    #     # Apply button to perform median blur
+    #     tk.Button(blur_window, text="Apply", command=apply_blur).grid(row=1, column=0, columnspan=2, pady=10)
+
+
+    # def apply_max_blur(self):
+    #     if self.original_image is None:
+    #         messagebox.showwarning("Warning", "Please load an image first.")
+    #         return
+
+    # # Create a new window to get the kernel size
+    #     blur_window = tk.Toplevel(self.root)
+    #     blur_window.title("Max Blur Parameters")
+
+    # # Label and entry for kernel size (must be odd numbers)
+    #     tk.Label(blur_window, text="Kernel Size (Odd Number, e.g., 31, 51, 101):").grid(row=0, column=0, padx=10, pady=5)
+    #     kernel_entry = tk.Entry(blur_window)
+    #     kernel_entry.grid(row=0, column=1, padx=10, pady=5)
+    #     kernel_entry.insert(0, "51")  # Default kernel size is 51
+
+    #     def apply_blur():
+    #         try:
+    #         # Parse and validate the kernel size
+    #             kernel_size = int(kernel_entry.get())
+    #             if kernel_size <= 0 or kernel_size % 2 == 0:
+    #                 messagebox.showerror("Error", "Kernel size must be a positive odd number.")
+    #                 return
+
+    #         # Apply Gaussian Blur with a very large kernel
+    #             blurred_image = cv2.GaussianBlur(self.original_image, (kernel_size, kernel_size), 0)
+
+    #         # Update the image and display the result
+    #             self.image = blurred_image
+    #             self.display_image(self.image, self.modified_canvas)
+
+    #             blur_window.destroy()
+    #         except ValueError:
+    #             messagebox.showerror("Error", "Please enter a valid integer for kernel size.")
+
+    # # Apply button to perform max blur
+    #     tk.Button(blur_window, text="Apply", command=apply_blur).grid(row=1, column=0, columnspan=2, pady=10)
+
+
+    # def apply_min_blur(self):
+    #     if self.original_image is None:
+    #         messagebox.showwarning("Warning", "Please load an image first.")
+    #         return
+
+    # # Create a new window to get the kernel size
+    #     blur_window = tk.Toplevel(self.root)
+    #     blur_window.title("Min Blur Parameters")
+
+    # # Label and entry for kernel size (must be odd numbers)
+    #     tk.Label(blur_window, text="Kernel Size (Odd Number, e.g., 3, 5, 7):").grid(row=0, column=0, padx=10, pady=5)
+    #     kernel_entry = tk.Entry(blur_window)
+    #     kernel_entry.grid(row=0, column=1, padx=10, pady=5)
+    #     kernel_entry.insert(0, "3")  # Default kernel size is 3
+
+    #     def apply_blur():
+    #         try:
+    #         # Parse and validate the kernel size
+    #             kernel_size = int(kernel_entry.get())
+    #             if kernel_size <= 0 or kernel_size % 2 == 0:
+    #                 messagebox.showerror("Error", "Kernel size must be a positive odd number.")
+    #                 return
+
+    #         # Apply Gaussian Blur with a very small kernel
+    #             blurred_image = cv2.GaussianBlur(self.original_image, (kernel_size, kernel_size), 0)
+
+    #         # Update the image and display the result
+    #             self.image = blurred_image
+    #             self.display_image(self.image, self.modified_canvas)
+
+    #             blur_window.destroy()
+    #         except ValueError:
+    #             messagebox.showerror("Error", "Please enter a valid integer for kernel size.")
+
+    # # Apply button to perform min blur
+    #     tk.Button(blur_window, text="Apply", command=apply_blur).grid(row=1, column=0, columnspan=2, pady=10)
+
+    # def apply_max_blur(self):
+    #     if self.original_image is None:
+    #         messagebox.showwarning("Warning", "Please load an image first.")
+    #         return
+
+    # # Create a new window to get the kernel size
+    #     blur_window = tk.Toplevel(self.root)
+    #     blur_window.title("Max Blur Parameters")
+
+    # # Label and entry for kernel size (must be odd numbers)
+    #     tk.Label(blur_window, text="Kernel Size (Odd Number, e.g., 31, 51, 101):").grid(row=0, column=0, padx=10, pady=5)
+    #     kernel_entry = tk.Entry(blur_window)
+    #     kernel_entry.grid(row=0, column=1, padx=10, pady=5)
+    #     kernel_entry.insert(0, "51")  # Default kernel size is 51
+
+    #     def apply_blur():
+    #         try:
+    #         # Parse and validate the kernel size
+    #             kernel_size = int(kernel_entry.get())
+    #             if kernel_size <= 0 or kernel_size % 2 == 0:
+    #                 messagebox.showerror("Error", "Kernel size must be a positive odd number.")
+    #                 return
+
+    #         # Apply Gaussian Blur with a very large kernel
+    #             blurred_image = cv2.GaussianBlur(self.original_image, (kernel_size, kernel_size), 0)
+
+    #         # Update the image and display the result
+    #             self.image = blurred_image
+    #             self.display_image(self.image, self.modified_canvas)
+
+    #             blur_window.destroy()
+    #         except ValueError:
+    #             messagebox.showerror("Error", "Please enter a valid integer for kernel size.")
+
+    # # Apply button to perform max blur
+    #     tk.Button(blur_window, text="Apply", command=apply_blur).grid(row=1, column=0, columnspan=2, pady=10)
+
+
+    # def add_gaussian_noise(self):
+    #     if self.original_image is None:
+    #         messagebox.showwarning("Warning", "Please load an image first.")
+    #         return
+
+    # # Create a new window to get the noise parameters
+    #     noise_window = tk.Toplevel(self.root)
+    #     noise_window.title("Gaussian Noise Parameters")
+
+    # # Label and entry for mean and standard deviation
+    #     tk.Label(noise_window, text="Mean (e.g., 0):").grid(row=0, column=0, padx=10, pady=5)
+    #     mean_entry = tk.Entry(noise_window)
+    #     mean_entry.grid(row=0, column=1, padx=10, pady=5)
+    #     mean_entry.insert(0, "0")
+
+    #     tk.Label(noise_window, text="Standard Deviation (e.g., 25):").grid(row=1, column=0, padx=10, pady=5)
+    #     std_dev_entry = tk.Entry(noise_window)
+    #     std_dev_entry.grid(row=1, column=1, padx=10, pady=5)
+    #     std_dev_entry.insert(0, "25")
+
+    #     def apply_noise():
+    #         try:
+    #         # Parse and validate the mean and standard deviation
+    #             mean = float(mean_entry.get())
+    #             std_dev = float(std_dev_entry.get())
+
+    #         # Generate Gaussian noise
+    #             noise = np.random.normal(mean, std_dev, self.original_image.shape).astype(np.float32)
+
+    #         # Add noise to the original image
+    #             noisy_image = cv2.add(self.original_image.astype(np.float32), noise)
+    #             noisy_image = np.clip(noisy_image, 0, 255).astype(np.uint8)
+
+    #         # Update the image and display the result
+    #             self.image = noisy_image
+    #             self.display_image(self.image, self.modified_canvas)
+
+    #             noise_window.destroy()
+    #         except ValueError:
+    #             messagebox.showerror("Error", "Please enter valid numbers for mean and standard deviation.")
+
+    # # Apply button to add Gaussian noise
+    #     tk.Button(noise_window, text="Apply", command=apply_noise).grid(row=2, column=0, columnspan=2, pady=10)
+
+    # def add_salt_pepper_noise(self):
+    #     if self.original_image is None:
+    #         messagebox.showwarning("Warning", "Please load an image first.")
+    #         return
+
+    # # Create a new window to get the noise parameters
+    #     noise_window = tk.Toplevel(self.root)
+    #     noise_window.title("Salt and Pepper Noise Parameters")
+
+    # # Label and entry for noise ratio
+    #     tk.Label(noise_window, text="Noise Ratio (e.g., 0.05 for 5%):").grid(row=0, column=0, padx=10, pady=5)
+    #     ratio_entry = tk.Entry(noise_window)
+    #     ratio_entry.grid(row=0, column=1, padx=10, pady=5)
+    #     ratio_entry.insert(0, "0.05")
+
+    #     def apply_noise():
+    #         try:
+    #         # Parse and validate the noise ratio
+    #             noise_ratio = float(ratio_entry.get())
+    #             if not (0 <= noise_ratio <= 1):
+    #                 messagebox.showerror("Error", "Noise ratio must be between 0 and 1.")
+    #                 return
+
+    #         # Generate salt and pepper noise
+    #             noisy_image = self.original_image.copy()
+    #             num_salt = int(noise_ratio * noisy_image.size * 0.5)
+    #             num_pepper = int(noise_ratio * noisy_image.size * 0.5)
+
+    #         # Add salt noise (white pixels)
+    #             coords = [
+    #                 np.random.randint(0, i - 1, num_salt) for i in noisy_image.shape[:2]
+    #             ]
+    #             noisy_image[coords[0], coords[1]] = 255
+
+    #         # Add pepper noise (black pixels)
+    #             coords = [
+    #                 np.random.randint(0, i - 1, num_pepper) for i in noisy_image.shape[:2]
+    #             ]
+    #             noisy_image[coords[0], coords[1]] = 0
+
+    #         # Update the image and display the result
+    #             self.image = noisy_image
+    #             self.display_image(self.image, self.modified_canvas)
+
+    #             noise_window.destroy()
+    #         except ValueError:
+    #             messagebox.showerror("Error", "Please enter a valid number for noise ratio.")
+
+    # # Apply button to add salt and pepper noise
+    #     tk.Button(noise_window, text="Apply", command=apply_noise).grid(row=1, column=0, columnspan=2, pady=10)
+
+    # def sharpening_filters(self):
+    #     if self.original_image is None:
+    #         messagebox.showwarning("Warning", "Please load an image first.")
+    #         return
+
+    # # Create a new window to get kernel dimensions and values
+    #     sharpen_window = tk.Toplevel(self.root)
+    #     sharpen_window.title("Sharpening Kernel Parameters")
+
+    # # Label and entry for kernel rows
+    #     tk.Label(sharpen_window, text="Kernel Rows:").grid(row=0, column=0, padx=10, pady=5)
+    #     rows_entry = tk.Entry(sharpen_window)
+    #     rows_entry.grid(row=0, column=1, padx=10, pady=5)
+    #     rows_entry.insert(0, "3")  # Default rows
+
+    # # Label and entry for kernel columns
+    #     tk.Label(sharpen_window, text="Kernel Columns:").grid(row=1, column=0, padx=10, pady=5)
+    #     cols_entry = tk.Entry(sharpen_window)
+    #     cols_entry.grid(row=1, column=1, padx=10, pady=5)
+    #     cols_entry.insert(0, "3")  # Default columns
+
+    #     def apply_custom_kernel():
+    #         try:
+    #         # Parse kernel dimensions
+    #             rows = int(rows_entry.get())
+    #             cols = int(cols_entry.get())
+
+    #             if rows <= 0 or cols <= 0:
+    #                 messagebox.showerror("Error", "Kernel dimensions must be positive integers.")
+    #                 return
+
+    #         # Create a new window to input kernel values
+    #             kernel_window = tk.Toplevel(self.root)
+    #             kernel_window.title("Kernel Values")
+
+    #         # Create entry fields for each kernel value
+    #             kernel_entries = []
+    #             for i in range(rows):
+    #                 row_entries = []
+    #                 for j in range(cols):
+    #                     entry = tk.Entry(kernel_window, width=5)
+    #                     entry.grid(row=i, column=j, padx=5, pady=5)
+    #                     row_entries.append(entry)
+    #                 kernel_entries.append(row_entries)
+
+    #             def apply_kernel():
+    #                 try:
+    #                 # Read kernel values from entries
+    #                     kernel = np.zeros((rows, cols), dtype=float)
+    #                     for i in range(rows):
+    #                         for j in range(cols):
+    #                             kernel[i, j] = float(kernel_entries[i][j].get())
+
+    #                 # Apply sharpening filter
+    #                     sharpened_image = cv2.filter2D(self.original_image, -1, kernel)
+
+    #                 # Update the image and display the result
+    #                     self.image = sharpened_image
+    #                     self.display_image(self.image, self.modified_canvas)
+
+    #                     kernel_window.destroy()
+    #                     sharpen_window.destroy()
+    #                 except ValueError:
+    #                     messagebox.showerror("Error", "Please enter valid numbers for all kernel values.")
+
+    #         # Apply button to process kernel
+    #             tk.Button(kernel_window, text="Apply", command=apply_kernel).grid(row=rows, column=0, columnspan=cols, pady=10)
+
+    #         except ValueError:
+    #             messagebox.showerror("Error", "Please enter valid integers for kernel dimensions.")
+
+    # # Next button to define kernel values
+    #     tk.Button(sharpen_window, text="Next", command=apply_custom_kernel).grid(row=2, column=0, columnspan=2, pady=10)
+
+
+    # def sobel_edge_detection(self):
+    #     if self.original_image is None:
+    #         messagebox.showwarning("Warning", "Please load an image first.")
+    #         return
+
+    # # Convert image to grayscale if it isn't already
+    #     gray_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
+
+    # # Apply Sobel edge detection
+    #     sobel_x = cv2.Sobel(gray_image, cv2.CV_64F, 1, 0, ksize=3)  # Gradient in x-direction
+    #     sobel_y = cv2.Sobel(gray_image, cv2.CV_64F, 0, 1, ksize=3)  # Gradient in y-direction
+
+    # # Combine the gradients
+    #     sobel_combined = cv2.magnitude(sobel_x, sobel_y)
+    #     sobel_combined = np.uint8(np.clip(sobel_combined, 0, 255))
+
+    # # Update the image and display the result
+    #     self.image = sobel_combined
+    #     self.display_image(self.image, self.modified_canvas)
+
+
+    # def canny_edge_detection(self):
+    #     if self.original_image is None:
+    #         messagebox.showwarning("Warning", "Please load an image first.")
+    #         return
+
+    # # Create a new window to get Canny parameters
+    #     canny_window = tk.Toplevel(self.root)
+    #     canny_window.title("Canny Edge Detection Parameters")
+
+    # # Label and entry for lower threshold
+    #     tk.Label(canny_window, text="Lower Threshold:").grid(row=0, column=0, padx=10, pady=5)
+    #     lower_thresh_entry = tk.Entry(canny_window)
+    #     lower_thresh_entry.grid(row=0, column=1, padx=10, pady=5)
+    #     lower_thresh_entry.insert(0, "50")
+
+    # # Label and entry for upper threshold
+    #     tk.Label(canny_window, text="Upper Threshold:").grid(row=1, column=0, padx=10, pady=5)
+    #     upper_thresh_entry = tk.Entry(canny_window)
+    #     upper_thresh_entry.grid(row=1, column=1, padx=10, pady=5)
+    #     upper_thresh_entry.insert(0, "150")
+
+    #     def apply_canny():
+    #         try:
+    #         # Parse thresholds
+    #             lower_thresh = int(lower_thresh_entry.get())
+    #             upper_thresh = int(upper_thresh_entry.get())
+
+    #         # Apply Canny edge detection
+    #             edges = cv2.Canny(self.original_image, lower_thresh, upper_thresh)
+
+    #         # Update the image and display the result
+    #             self.image = edges
+    #             self.display_image(self.image, self.modified_canvas)
+
+    #             canny_window.destroy()
+    #         except ValueError:
+    #             messagebox.showerror("Error", "Please enter valid integers for thresholds.")
+
+    # # Apply button to perform Canny edge detection
+    #     tk.Button(canny_window, text="Apply", command=apply_canny).grid(row=2, column=0, columnspan=2, pady=10)
 
 
     def display_image(self, img, canvas):
